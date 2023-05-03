@@ -1,7 +1,9 @@
 import pandas as pd
 from scipy.stats import ttest_ind
 import os
-
+from sklearn.ensemble import RandomForestClassifier
+import numpy as np
+from os import listdir
 SUPPORTED_METHODS=["t_FDR","random_forest"]
 
 def dim_reduction(method:str):
@@ -16,6 +18,8 @@ def dim_reduction(method:str):
     if not method in SUPPORTED_METHODS:
         raise ValueError("Unsupported method")
 
+    normal_matrix_sub=normal_data
+    tumor_matrix_sub=tumor_data
     if method=='t_FDR':
         # Calculate t-FDR and get significant genes
         t_stat, p_val = ttest_ind(normal_matrix, tumor_matrix)
@@ -25,10 +29,29 @@ def dim_reduction(method:str):
         # Subset data to significant genes
         normal_matrix_sub = normal_data.loc[significant_genes]
         tumor_matrix_sub = tumor_data.loc[significant_genes]
-    elif method=='random':
-        normal_matrix_sub = data['normal']
-        tumor_matrix_sub = data['tumor']
-        #TODO
+    elif method=='random_forest':
+        rf = RandomForestClassifier(n_estimators=10,max_depth=10)
+        rf.fit(np.concatenate((normal_matrix,tumor_matrix)), [0] * normal_matrix.shape[0] + [1] * tumor_matrix.shape[0])
+        importances = rf.feature_importances_
+    
+        # Calculate mean decrease impurity (MDI)
+        mdi = np.mean([tree.feature_importances_ for tree in rf.estimators_], axis=0)
+    
+        # Calculate the decrease impurity for each feature
+        mdi_values = np.empty(importances.shape[0])
+        for feature in range(importances.shape[0]):
+            if feature%5000==0: print(f'\rin process...{"{:.2f}".format(feature/importances.shape[0]*100)}%')
+            mdi_values[feature] = np.mean([tree.feature_importances_[feature] - mdi[feature] for tree in rf.estimators_])
+        # Calculate the mean of MDI values
+        mdi_mean = np.mean(mdi_values)
+    
+        # Subset data to features with MDI values above the mean
+        significant_genes1 = normal_data.index[mdi_values >= mdi_mean]
+        significant_genes2= tumor_data.index[mdi_values>= mdi_mean]
+    
+        # Subset data to significant genes
+        normal_matrix_sub = normal_data.loc[significant_genes1,:]
+        tumor_matrix_sub = tumor_data.loc[significant_genes2,:]
 
     if not os.path.exists('reduction'):
         os.makedirs('reduction')
@@ -41,7 +64,12 @@ def sort_by_importance():
     pass 
 
 def main():
+   if 'normal_matrix_t_FDR.csv' not in listdir('reduction'):
+    print('generating FDR reduction...')
     dim_reduction("t_FDR")
+   if 'normal_matrix_random_forest.csv' not in listdir('reduction'):
+    print('generating random_forest reduction...')
+    dim_reduction("random_forest")
     sort_by_importance()
 
 main()
