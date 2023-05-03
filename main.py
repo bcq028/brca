@@ -33,8 +33,8 @@ def dim_reduction(method:str):
     if not os.path.exists('reduction'):
         os.makedirs('reduction')
 
-    pd.DataFrame(normal_matrix_sub).to_csv('reduction/normal_matrix_sub.csv', index=True)
-    pd.DataFrame(tumor_matrix_sub).to_csv('reduction/tumor_matrix_sub.csv', index=True)
+    pd.DataFrame(normal_matrix_sub).to_csv(f'reduction/normal_matrix_{method}.csv', index=True)
+    pd.DataFrame(tumor_matrix_sub).to_csv(f'reduction/tumor_matrix_{method}.csv', index=True)
 
 def sort_by_importance():
     #TODO
